@@ -4,8 +4,8 @@ COPY_PATH="$1"
 set -e
 VERSION=`cinder-volume --version 2>&1`
 MAJOR_VERSION="$( cut -d '.' -f 1 <<< "$VERSION" )"
-if [ "$MAJOR_VERSION" != '7' ]; then
-    echo "This system is not a Liberty version. \"cinder-volume --version\" for Liberty should be 7.x.x but this system is $VERSION"
+if [ "$MAJOR_VERSION" != '8' ]; then
+    echo "This system is not a Mitaka version. \"cinder-volume --version\" for Mitaka should be 8.x.x but this system is $VERSION"
     exit 1
 else
     echo "OpenStack Cinder version is $VERSION"
