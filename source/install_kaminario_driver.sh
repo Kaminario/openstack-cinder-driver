@@ -36,7 +36,7 @@ case $response in
             touch $file
         fi
 
-        cp -vR kaminario_patch/* $COPY_PATH
+        cp -vR kaminario/* $COPY_PATH
         ;;
     *)
         echo "Not applying patch"
