@@ -40,7 +40,7 @@ from cinder.volume import utils as vol_utils
 krest = importutils.try_import("krest")
 
 K2_MIN_VERSION = '2.2.0'
-K2_LOCK_PREFIX = 'Kaminario'
+K2_LOCK_NAME = 'Kaminario'
 MAX_K2_RETRY = 5
 K2_REP_FAILED_OVER = fields.ReplicationStatus.FAILED_OVER
 LOG = logging.getLogger(__name__)
@@ -141,8 +141,6 @@ class KaminarioCinderDriver(cinder.volume.driver.ISCSIDriver):
         self.configuration.append_config_values(kaminario2_opts)
         self.replica = None
         self._protocol = None
-        k2_lock_sfx = self.configuration.safe_get('san_ip')
-        self.k2_lock_name = "%s-%s" % (K2_LOCK_PREFIX, k2_lock_sfx)
 
     @kaminario_logger
     def check_for_setup_error(self):

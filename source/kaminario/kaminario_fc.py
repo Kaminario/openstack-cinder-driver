@@ -17,8 +17,8 @@ import six
 
 from oslo_log import log as logging
 
-from cinder import coordination
 from cinder import exception
+from cinder import utils
 from cinder.i18n import _, _LE
 from cinder.objects import fields
 from cinder.volume.drivers.kaminario import kaminario_common as common
@@ -33,14 +33,10 @@ class KaminarioFCDriver(common.KaminarioCinderDriver):
     """Kaminario K2 FC Volume Driver.
 
     Version history:
-        1.0 - Initial driver
-        1.1 - Added manage/unmanage and extra-specs support for nodedup
-        1.2 - Added replication support
-        1.3 - Added retype support
-        1.4 - Added replication failback support
+        1.0.2.0 - Initial driver
     """
 
-    VERSION = '1.4'
+    VERSION = '1.0.2.0'
 
     # ThirdPartySystems wiki page name
     CI_WIKI_NAME = "Kaminario_K2_CI"
@@ -53,7 +49,7 @@ class KaminarioFCDriver(common.KaminarioCinderDriver):
 
     @fczm_utils.AddFCZone
     @kaminario_logger
-    @coordination.synchronized('{self.k2_lock_name}')
+    @utils.synchronized(common.K2_LOCK_NAME, external=True)
     def initialize_connection(self, volume, connector):
         """Attach K2 volume to host."""
         # Check wwpns in host connector.
@@ -86,7 +82,7 @@ class KaminarioFCDriver(common.KaminarioCinderDriver):
 
     @fczm_utils.RemoveFCZone
     @kaminario_logger
-    @coordination.synchronized('{self.k2_lock_name}')
+    @utils.synchronized(common.K2_LOCK_NAME, external=True)
     def terminate_connection(self, volume, connector, **kwargs):
         # To support replication failback
         temp_client = None
