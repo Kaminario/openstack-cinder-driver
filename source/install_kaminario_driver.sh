@@ -13,7 +13,7 @@ fi
 
 if ! [ -n "$COPY_PATH" ]
 then
-    echo -e "Enter path upto cinder directory for the kaminario driver \nSyntax : ./kaminario_patch.sh /path/to/copy"
+    echo -e "Enter path upto cinder directory for the kaminario driver \nSyntax: $0 /path/to/copy"
     exit 1
 fi
 
