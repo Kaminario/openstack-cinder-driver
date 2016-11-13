@@ -33,6 +33,7 @@ from cinder.i18n import _, _LE, _LW, _LI
 from cinder import utils
 from cinder.volume.drivers.san import san
 from cinder.volume import utils as vol_utils
+from cinder.volume import volume_types
 
 krest = importutils.try_import("krest")
 
@@ -567,10 +568,12 @@ class KaminarioCinderDriver(cinder.volume.driver.ISCSIDriver):
         pass
 
     def _get_is_dedup(self, vol_type):
-        if vol_type.extra_specs:
-            for item in vol_type.extra_specs:
-                if (item.get('key') == 'kaminario:thin_prov_type' and
-                   item.get('value') == 'nodedup'):
+        if vol_type:
+            type_id = vol_type.get('id')
+            if type_id:
+                specs = volume_types.get_volume_type_extra_specs(type_id)
+                if (specs and
+                        specs.get('kaminario:thin_prov_type') == 'nodedup'):
                     return False
         return True
 
@@ -612,7 +615,7 @@ class KaminarioCinderDriver(cinder.volume.driver.ISCSIDriver):
             raise exception.ManageExistingInvalidReference(
                 existing_ref=existing_ref,
                 reason=six.text_type(ex.message))
- 
+
     @kaminario_logger
     def manage_existing_get_size(self, volume, existing_ref):
         vol_name = existing_ref['source-name']
@@ -639,11 +642,10 @@ class KaminarioCinderDriver(cinder.volume.driver.ISCSIDriver):
         vol_new = self.client.search("volumes", name=vol_name_new).hits[0]
         vol_new.name = vol_name_old
         vol_new.save()
-    
+
     def _kaminario_disconnect_volume(self, *attach_info):
         for info in attach_info:
             if (info and info.get('connector') and
                     info.get('conn', {}).get('data') and info.get('device')):
                 info['connector'].disconnect_volume(info['conn']['data'],
                                                     info['device'])
-
