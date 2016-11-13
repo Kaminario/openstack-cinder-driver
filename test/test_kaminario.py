@@ -18,7 +18,6 @@ from oslo_utils import units
 
 from cinder import context
 from cinder import exception
-from cinder.objects import fields
 from cinder import test
 from cinder.tests.unit import fake_snapshot
 from cinder.tests.unit import fake_volume
@@ -27,6 +26,7 @@ from cinder.volume import configuration
 from cinder.volume.drivers.kaminario import kaminario_fc
 from cinder.volume.drivers.kaminario import kaminario_iscsi
 from cinder.volume import utils as vol_utils
+from cinder.volume import volume_types
 
 CONNECTOR = {'initiator': 'iqn.1993-08.org.debian:01:12aa12aa12aa',
              'ip': '192.168.2.5', 'platform': 'x86_64', 'host': 'test-k2',
@@ -51,8 +51,6 @@ class FakeSaveObject(FakeK2Obj):
         self.volume_group = self
         self.is_dedup = True
         self.size = units.Mi
-        self.replication_status = None
-        self.state = 'in_sync'
 
     def save(self):
         return FakeSaveObject()
@@ -99,13 +97,6 @@ class FakeKrestException(object):
         return FakeSaveObjectExp()
 
 
-class Replication(object):
-    backend_id = '10.0.0.1'
-    login = 'login'
-    password = 'password'
-    rpo = 500
-
-
 class TestKaminarioISCSI(test.TestCase):
     driver = None
     conf = None
@@ -117,7 +108,8 @@ class TestKaminarioISCSI(test.TestCase):
         self.context = context.get_admin_context()
         self.vol = fake_volume.fake_volume_obj(self.context)
         self.vol.volume_type = fake_volume.fake_volume_type_obj(self.context)
-        self.vol.volume_type.extra_specs = {'foo': None}
+        volume_types.get_volume_type_extra_specs = (
+            mock.Mock(return_value={'key': 'value'}))
         self.snap = fake_snapshot.fake_snapshot_obj(self.context)
         self.snap.volume = self.vol
 
@@ -290,12 +282,11 @@ class TestKaminarioISCSI(test.TestCase):
 
     def test_manage_existing(self):
         """Test manage_existing."""
-        self.driver._get_replica_status = mock.Mock(return_value=False)
         result = self.driver.manage_existing(self.vol, {'source-name': 'test'})
         self.assertIsNone(result)
 
     def test_manage_existing_exp(self):
-        self.driver._get_replica_status = mock.Mock(return_value=True)
+        self.driver.client = FakeKrestException()
         self.assertRaises(exception.ManageExistingInvalidReference,
                           self.driver.manage_existing, self.vol,
                           {'source-name': 'test'})
@@ -312,146 +303,19 @@ class TestKaminarioISCSI(test.TestCase):
         result = self.driver._get_is_dedup(self.vol.volume_type)
         self.assertTrue(result)
 
-    def test_get_is_dedup_false(self):
+    @mock.patch.object(volume_types, 'get_volume_type_extra_specs')
+    def test_get_is_dedup_false(self, m_get_extra_specs):
         """Test _get_is_dedup_false."""
-        specs = {'kaminario:thin_prov_type': 'nodedup'}
-        self.vol.volume_type.extra_specs = specs
+        m_get_extra_specs.return_value = {
+            'kaminario:thin_prov_type': 'nodedup'}
         result = self.driver._get_is_dedup(self.vol.volume_type)
         self.assertFalse(result)
-
-    def test_get_replica_status(self):
-        """Test _get_replica_status."""
-        result = self.driver._get_replica_status(self.vol)
-        self.assertTrue(result)
-
-    def test_create_volume_replica(self):
-        """Test _create_volume_replica."""
-        vg = FakeSaveObject()
-        rep = Replication()
-        self.driver.replica = rep
-        session_name = self.driver.get_session_name('1234567890987654321')
-        self.assertEqual('ssn-1234567890987654321', session_name)
-        rsession_name = self.driver.get_rep_name(session_name)
-        self.assertEqual('rssn-1234567890987654321', rsession_name)
-        src_ssn = self.driver.client.new("replication/sessions").save()
-        self.assertEqual('in_sync', src_ssn.state)
-        result = self.driver._create_volume_replica(self.vol, vg, vg, rep.rpo)
-        self.assertIsNone(result)
-
-    def test_create_volume_replica_exp(self):
-        """Test _create_volume_replica_exp."""
-        vg = FakeSaveObject()
-        rep = Replication()
-        self.driver.replica = rep
-        self.driver.client = FakeKrestException()
-        self.assertRaises(exception.KaminarioCinderDriverException,
-                          self.driver._create_volume_replica, self.vol,
-                          vg, vg, rep.rpo)
-
-    def test_delete_by_ref(self):
-        """Test _delete_by_ref."""
-        result = self.driver._delete_by_ref(self.driver.client, 'volume',
-                                            'name', 'message')
-        self.assertIsNone(result)
-
-    def test_failover_volume(self):
-        """Test _failover_volume."""
-        self.driver.target = FakeKrest()
-        session_name = self.driver.get_session_name('1234567890987654321')
-        self.assertEqual('ssn-1234567890987654321', session_name)
-        rsession_name = self.driver.get_rep_name(session_name)
-        self.assertEqual('rssn-1234567890987654321', rsession_name)
-        result = self.driver._failover_volume(self.vol)
-        self.assertIsNone(result)
-
-    def test_failover_host(self):
-        """Test failover_host."""
-        volumes = [self.vol, self.vol]
-        self.driver.replica = Replication()
-        self.driver.target = FakeKrest()
-        backend_ip, res_volumes = self.driver.failover_host(None, volumes)
-        self.assertEqual('10.0.0.1', backend_ip)
-        status = res_volumes[0]['updates']['replication_status']
-        self.assertEqual(fields.ReplicationStatus.FAILED_OVER, status)
-
-    def test_delete_volume_replica(self):
-        """Test _delete_volume_replica."""
-        self.driver.replica = Replication()
-        self.driver.target = FakeKrest()
-        session_name = self.driver.get_session_name('1234567890987654321')
-        self.assertEqual('ssn-1234567890987654321', session_name)
-        rsession_name = self.driver.get_rep_name(session_name)
-        self.assertEqual('rssn-1234567890987654321', rsession_name)
-        res = self.driver._delete_by_ref(self.driver.client, 'volumes',
-                                         'test', 'test')
-        self.assertIsNone(res)
-        result = self.driver._delete_volume_replica(self.vol, 'test', 'test')
-        self.assertIsNone(result)
-        src_ssn = self.driver.client.search("replication/sessions").hits[0]
-        self.assertEqual('idle', src_ssn.state)
-
-    def test_delete_volume_replica_exp(self):
-        """Test _delete_volume_replica_exp."""
-        self.driver.replica = Replication()
-        self.driver.target = FakeKrestException()
-        self.driver._check_for_status = mock.Mock()
-        self.assertRaises(exception.KaminarioCinderDriverException,
-                          self.driver._delete_volume_replica, self.vol,
-                          'test', 'test')
-
-    def test_get_is_replica(self):
-        """Test get_is_replica."""
-        result = self.driver._get_is_replica(self.vol.volume_type)
-        self.assertFalse(result)
-
-    def test_get_is_replica_true(self):
-        """Test get_is_replica_true."""
-        self.driver.replica = Replication()
-        self.vol.volume_type.extra_specs = {'kaminario:replication': 'enabled'}
-        result = self.driver._get_is_replica(self.vol.volume_type)
-        self.assertTrue(result)
+        m_get_extra_specs.assert_called_once_with('1')
 
     def test_after_volume_copy(self):
         """Test after_volume_copy."""
         result = self.driver.after_volume_copy(None, self.vol,
                                                self.vol.volume_type)
-        self.assertIsNone(result)
-
-    def test_retype(self):
-        """Test retype."""
-        replica_status = self.driver._get_replica_status('test')
-        self.assertTrue(replica_status)
-        replica = self.driver._get_is_replica(self.vol.volume_type)
-        self.assertFalse(replica)
-        self.driver.replica = Replication()
-        result = self.driver._add_replication(self.vol)
-        self.assertIsNone(result)
-        self.driver.target = FakeKrest()
-        self.driver._check_for_status = mock.Mock()
-        result = self.driver._delete_replication(self.vol)
-        self.assertIsNone(result)
-        self.driver._delete_volume_replica = mock.Mock()
-        result = self.driver.retype(None, self.vol,
-                                    self.vol.volume_type, None, None)
-        self.assertTrue(result)
-        new_vol_type = fake_volume.fake_volume_type_obj(self.context)
-        new_vol_type.extra_specs = {'kaminario:thin_prov_type': 'nodedup'}
-        result2 = self.driver.retype(None, self.vol,
-                                     new_vol_type, None, None)
-        self.assertFalse(result2)
-
-    def test_add_replication(self):
-        """"Test _add_replication."""
-        self.driver.replica = Replication()
-        result = self.driver._add_replication(self.vol)
-        self.assertIsNone(result)
-
-    def test_delete_replication(self):
-        """Test _delete_replication."""
-        self.driver.replica = Replication()
-        self.driver.target = FakeKrest()
-        self.driver._check_for_status = mock.Mock()
-        result = self.driver._delete_replication(self.vol)
         self.assertIsNone(result)
 
 
