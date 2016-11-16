@@ -588,10 +588,11 @@ class KaminarioCinderDriver(cinder.volume.driver.ISCSIDriver):
             LOG.debug("Searching volume: %s in K2.", vol_name)
             vol = self.client.search("volumes", name=vol_name).hits[0]
             vg = vol.volume_group
+            nvol = self.client.search("volumes", volume_group=vg).total
             vol_map = False
             if self.client.search("mappings", volume=vol).total != 0:
                 vol_map = True
-            if is_dedup != vg.is_dedup or vol_map:
+            if is_dedup != vg.is_dedup or vol_map or nvol != 1:
                 raise exception.ManageExistingInvalidReference(
                     existing_ref=existing_ref,
                     reason=_('Manage volume type invalid.'))
