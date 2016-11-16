@@ -51,6 +51,7 @@ class FakeSaveObject(FakeK2Obj):
         self.volume_group = self
         self.is_dedup = True
         self.size = units.Mi
+        self.wan_port = None
 
     def save(self):
         return FakeSaveObject()
