@@ -32,9 +32,10 @@ class KaminarioISCSIDriver(common.KaminarioCinderDriver):
 
     Version history:
         1.0.1.0 - Initial driver
+        1.0.1.1 - fixed a couple of bugs
     """
 
-    VERSION = '1.0.1.0'
+    VERSION = '1.0.1.1'
 
     # ThirdPartySystems wiki page name
     CI_WIKI_NAME = "Kaminario_K2_CI"
