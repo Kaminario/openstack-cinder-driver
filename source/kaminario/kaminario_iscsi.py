@@ -40,9 +40,10 @@ class KaminarioISCSIDriver(common.KaminarioCinderDriver):
         1.2 - Added replication support
         1.3 - Added retype support
         1.4 - Added replication failback support
+        1.4.1 - fixed a couple of bugs
     """
 
-    VERSION = '1.4'
+    VERSION = '1.4.1'
 
     # ThirdPartySystems wiki page name
     CI_WIKI_NAME = "Kaminario_K2_CI"
